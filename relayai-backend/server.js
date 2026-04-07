@@ -1,0 +1,11 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const contextRoutes = require('./routes/context');
+const app = express();
+const PORT = process.env.PORT || 3000;
+app.use(cors({ origin: '*', methods: ['POST', 'GET'] }));
+app.use(express.json({ limit: '2mb' }));
+app.use('/api', contextRoutes);
+app.get('/health', (req, res) => res.json({ status: 'ok', version: '1.0' }));
+app.listen(PORT, () => console.log('[RelayAI] Server running on http://localhost:' + PORT));
