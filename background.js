@@ -110,7 +110,7 @@ function openTarget(target, prompt) {
 
 async function handleTransfer(data, target, sendResponse) {
   try {
-    var res = await fetch('http://localhost:3000/api/parse-context', {
+    var res = await fetch('https://relayai-2wfo.onrender.com/api/parse-context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: data.messages, rawText: data.rawText })
