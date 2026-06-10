@@ -1,69 +1,66 @@
 const fs = require('fs');
-const path = require('path');
 
-const injectFunc = function(promptText) {
-  var tries = 0;
-  var timer = setInterval(function() {
-    tries++;
+const content = [
+'const MAX_CHARS_PER_MESSAGE = 1500;',
+'const MAX_TOTAL_MESSAGES = 60;',
+'',
+'function truncateMessage(text, max) {',
+'  if (!text) return "";',
+'  if (text.length <= max) return text;',
+'  return text.slice(0, max) + "... [truncated]";',
+'}',
+'',
+'function buildParserPrompt(messages) {',
+'  var msgs = messages;',
+'  if (msgs.length > MAX_TOTAL_MESSAGES) {',
+'    var first = msgs.slice(0, 10);',
+'    var last = msgs.slice(-(MAX_TOTAL_MESSAGES - 10));',
+'    msgs = first.concat([{ role: "system", text: "... [" + (messages.length - MAX_TOTAL_MESSAGES) + " messages omitted] ...", codeBlocks: [] }], last);',
+'  }',
+'',
+'  var conversation = msgs.map(function(m) {',
+'    var codeSection = "";',
+'    if (m.codeBlocks && m.codeBlocks.length) {',
+'      codeSection = "\\nCODE BLOCKS:\\n" + m.codeBlocks.map(function(b) {',
+'        return "```" + b.language + "\\n" + truncateMessage(b.code, 1000) + "\\n```";',
+'      }).join("\\n");',
+'    }',
+'    return "[" + (m.role || "user").toUpperCase() + "]:\\n" + truncateMessage(m.text, MAX_CHARS_PER_MESSAGE) + codeSection;',
+'  }).join("\\n\\n---\\n\\n");',
+'',
+'  var prompt = "You are an expert technical context extractor for developer AI workflows.\\n\\n" +',
+'    "Your job is to analyze a conversation and produce a COMPREHENSIVE, DETAILED, WELL-STRUCTURED technical manifest.\\n\\n" +',
+'    "CRITICAL RULES:\\n" +',
+'    "- Be THOROUGH — do not summarize too briefly\\n" +',
+'    "- Include ALL code that was written or discussed\\n" +',
+'    "- Capture EVERY error, its cause, and resolution\\n" +',
+'    "- Write summaries like a senior developer explaining to another senior developer\\n" +',
+'    "- The receiving AI must be able to FULLY continue the work without any gaps\\n\\n" +',
+'    "CONVERSATION TO ANALYZE:\\n" + conversation + "\\n\\n" +',
+'    "Return ONLY a valid JSON object with NO markdown, NO backticks, NO explanation.\\n\\n" +',
+'    "{\\n" +',
+'    "  \\"projectName\\": \\"Clear descriptive project name\\",\\n" +',
+'    "  \\"summary\\": \\"4-6 sentences: what is built, why, architecture, completed, in progress, blockers\\",\\n" +',
+'    "  \\"techStack\\": { \\"frontend\\": [], \\"backend\\": [], \\"database\\": [], \\"devOps\\": [], \\"other\\": [] },\\n" +',
+'    "  \\"architecture\\": { \\"overview\\": \\"\\", \\"frontend\\": \\"\\", \\"backend\\": \\"\\", \\"database\\": \\"\\", \\"deployment\\": \\"\\"},\\n" +',
+'    "  \\"apiEndpoints\\": [{ \\"method\\": \\"\\", \\"path\\": \\"\\", \\"description\\": \\"\\", \\"requestBody\\": {}, \\"responseSchema\\": {}, \\"authRequired\\": false, \\"status\\": \\"\\"}],\\n" +',
+'    "  \\"dataModels\\": [{ \\"name\\": \\"\\", \\"description\\": \\"\\", \\"fields\\": {}, \\"relationships\\": \\"\\", \\"validations\\": \\"\\"}],\\n" +',
+'    "  \\"codeFiles\\": [{ \\"filename\\": \\"\\", \\"language\\": \\"\\", \\"purpose\\": \\"\\", \\"latestCode\\": \\"\\", \\"keyFunctions\\": [], \\"dependencies\\": []}],\\n" +',
+'    "  \\"errorsEncountered\\": [{ \\"error\\": \\"\\", \\"context\\": \\"\\", \\"cause\\": \\"\\", \\"resolution\\": \\"\\", \\"preventionNote\\": \\"\\"}],\\n" +',
+'    "  \\"failedApproaches\\": [{ \\"approach\\": \\"\\", \\"reason\\": \\"\\", \\"lesson\\": \\"\\"}],\\n" +',
+'    "  \\"decisions\\": [{ \\"decision\\": \\"\\", \\"reasoning\\": \\"\\", \\"alternatives\\": \\"\\"}],\\n" +',
+'    "  \\"currentStatus\\": \\"Detailed paragraph of exactly where the project is now\\",\\n" +',
+'    "  \\"nextSteps\\": [\\"at least 5 specific actionable steps in priority order\\"],\\n" +',
+'    "  \\"importantContext\\": \\"coding style, naming conventions, constraints, requirements\\",\\n" +',
+'    "  \\"completedFeatures\\": [\\"every fully working feature\\"],\\n" +',
+'    "  \\"pendingFeatures\\": [\\"every discussed but not implemented feature\\"]\\n" +',
+'    "}";',
+'',
+'  return prompt;',
+'}',
+'',
+'module.exports = { buildParserPrompt };'
+].join('\n');
 
-    // Gemini specific selectors in order of priority
-    var selectors = [
-      '.ql-editor',
-      'rich-textarea .ql-editor', 
-      'div[contenteditable="true"]',
-      'rich-textarea',
-      'textarea',
-      'p[data-placeholder]'
-    ];
-
-    var input = null;
-    for (var i = 0; i < selectors.length; i++) {
-      input = document.querySelector(selectors[i]);
-      if (input) break;
-    }
-
-    if (input) {
-      clearInterval(timer);
-      input.focus();
-
-      // Method 1: execCommand (works for contenteditable)
-      try {
-        input.click();
-        input.focus();
-        document.execCommand('selectAll', false, null);
-        document.execCommand('insertText', false, promptText);
-        input.dispatchEvent(new InputEvent('input', { bubbles: true }));
-        return;
-      } catch(e) {}
-
-      // Method 2: direct textContent
-      try {
-        input.textContent = promptText;
-        input.dispatchEvent(new InputEvent('input', { bubbles: true }));
-        return;
-      } catch(e) {}
-
-      // Method 3: clipboard paste simulation
-      try {
-        navigator.clipboard.writeText(promptText).then(function() {
-          input.focus();
-          document.execCommand('paste');
-        });
-      } catch(e) {}
-    }
-
-    if (tries > 30) clearInterval(timer);
-  }, 600);
-};
-
-// Read current background.js and replace just the injection function
-let bg = fs.readFileSync(path.join('..', 'background.js'), 'utf8');
-
-const newInject = `func: ${injectFunc.toString()},`;
-bg = bg.replace(
-  /func: function\(promptText\) \{[\s\S]*?\},\s*args:/,
-  newInject + '\n                args:'
-);
-
-fs.writeFileSync(path.join('..', 'background.js'), bg, 'utf8');
-console.log('Gemini injection updated!');
+fs.writeFileSync('utils/buildprompt.js', content, 'utf8');
+console.log('buildprompt.js upgraded successfully!');

@@ -1,50 +1,59 @@
-const MAX_CHARS_PER_MESSAGE = 400;
-const MAX_TOTAL_MESSAGES    = 40;
+const MAX_CHARS_PER_MESSAGE = 1500;
+const MAX_TOTAL_MESSAGES = 60;
 
 function truncateMessage(text, max) {
-  if (!text) return '';
+  if (!text) return "";
   if (text.length <= max) return text;
-  return text.slice(0, max) + '... [truncated]';
+  return text.slice(0, max) + "... [truncated]";
 }
 
 function buildParserPrompt(messages) {
   var msgs = messages;
-
-  // If too many messages, keep first 5 and last 35 (context + recent work)
   if (msgs.length > MAX_TOTAL_MESSAGES) {
-    var first = msgs.slice(0, 5);
-    var last  = msgs.slice(-(MAX_TOTAL_MESSAGES - 5));
-    msgs = first.concat([{ role: 'system', text: '... [' + (messages.length - MAX_TOTAL_MESSAGES) + ' messages omitted for length] ...', codeBlocks: [] }], last);
+    var first = msgs.slice(0, 10);
+    var last = msgs.slice(-(MAX_TOTAL_MESSAGES - 10));
+    msgs = first.concat([{ role: "system", text: "... [" + (messages.length - MAX_TOTAL_MESSAGES) + " messages omitted] ...", codeBlocks: [] }], last);
   }
 
   var conversation = msgs.map(function(m) {
-    var codeSection = '';
+    var codeSection = "";
     if (m.codeBlocks && m.codeBlocks.length) {
-      codeSection = '\nCode:\n' + m.codeBlocks.map(function(b) {
-        return '```' + b.language + '\n' + truncateMessage(b.code, 300) + '\n```';
-      }).join('\n');
+      codeSection = "\nCODE BLOCKS:\n" + m.codeBlocks.map(function(b) {
+        return "```" + b.language + "\n" + truncateMessage(b.code, 1000) + "\n```";
+      }).join("\n");
     }
-    return '[' + (m.role || 'user').toUpperCase() + ']: ' + truncateMessage(m.text, MAX_CHARS_PER_MESSAGE) + codeSection;
-  }).join('\n\n---\n\n');
+    return "[" + (m.role || "user").toUpperCase() + "]:\n" + truncateMessage(m.text, MAX_CHARS_PER_MESSAGE) + codeSection;
+  }).join("\n\n---\n\n");
 
-  return 'You are a technical context extractor for developer AI workflows.\n\n' +
-    'Analyze the following conversation between a developer and an AI assistant.\n' +
-    'Extract ALL technical information and return ONLY a valid JSON object — no markdown, no explanation, no backticks.\n\n' +
-    'CONVERSATION:\n' + conversation + '\n\n' +
-    'Return this EXACT JSON structure (use empty arrays/null if not found):\n' +
-    JSON.stringify({
-      projectName: "inferred project name or null",
-      summary: "2-3 sentence summary of what is being built and current state",
-      techStack: { frontend: [], backend: [], database: [], devOps: [], other: [] },
-      apiEndpoints: [{ method: "POST", path: "/example", description: "what it does", requestBody: {}, responseSchema: {} }],
-      dataModels: [{ name: "ModelName", fields: { fieldName: "type" }, description: "what it represents" }],
-      codeFiles: [{ filename: "example.js", language: "javascript", purpose: "what this file does", latestCode: "most recent version" }],
-      errorsEncountered: [{ error: "error message", cause: "what caused it", resolution: "how fixed or null" }],
-      failedApproaches: [{ approach: "what was tried", reason: "why it failed" }],
-      currentStatus: "what was the last thing being worked on",
-      nextSteps: ["step 1", "step 2"],
-      importantContext: "any other critical context"
-    }, null, 2);
+  var prompt = "You are an expert technical context extractor for developer AI workflows.\n\n" +
+    "Your job is to analyze a conversation and produce a COMPREHENSIVE, DETAILED, WELL-STRUCTURED technical manifest.\n\n" +
+    "CRITICAL RULES:\n" +
+    "- Be THOROUGH — do not summarize too briefly\n" +
+    "- Include ALL code that was written or discussed\n" +
+    "- Capture EVERY error, its cause, and resolution\n" +
+    "- Write summaries like a senior developer explaining to another senior developer\n" +
+    "- The receiving AI must be able to FULLY continue the work without any gaps\n\n" +
+    "CONVERSATION TO ANALYZE:\n" + conversation + "\n\n" +
+    "Return ONLY a valid JSON object with NO markdown, NO backticks, NO explanation.\n\n" +
+    "{\n" +
+    "  \"projectName\": \"Clear descriptive project name\",\n" +
+    "  \"summary\": \"4-6 sentences: what is built, why, architecture, completed, in progress, blockers\",\n" +
+    "  \"techStack\": { \"frontend\": [], \"backend\": [], \"database\": [], \"devOps\": [], \"other\": [] },\n" +
+    "  \"architecture\": { \"overview\": \"\", \"frontend\": \"\", \"backend\": \"\", \"database\": \"\", \"deployment\": \"\"},\n" +
+    "  \"apiEndpoints\": [{ \"method\": \"\", \"path\": \"\", \"description\": \"\", \"requestBody\": {}, \"responseSchema\": {}, \"authRequired\": false, \"status\": \"\"}],\n" +
+    "  \"dataModels\": [{ \"name\": \"\", \"description\": \"\", \"fields\": {}, \"relationships\": \"\", \"validations\": \"\"}],\n" +
+    "  \"codeFiles\": [{ \"filename\": \"\", \"language\": \"\", \"purpose\": \"\", \"latestCode\": \"\", \"keyFunctions\": [], \"dependencies\": []}],\n" +
+    "  \"errorsEncountered\": [{ \"error\": \"\", \"context\": \"\", \"cause\": \"\", \"resolution\": \"\", \"preventionNote\": \"\"}],\n" +
+    "  \"failedApproaches\": [{ \"approach\": \"\", \"reason\": \"\", \"lesson\": \"\"}],\n" +
+    "  \"decisions\": [{ \"decision\": \"\", \"reasoning\": \"\", \"alternatives\": \"\"}],\n" +
+    "  \"currentStatus\": \"Detailed paragraph of exactly where the project is now\",\n" +
+    "  \"nextSteps\": [\"at least 5 specific actionable steps in priority order\"],\n" +
+    "  \"importantContext\": \"coding style, naming conventions, constraints, requirements\",\n" +
+    "  \"completedFeatures\": [\"every fully working feature\"],\n" +
+    "  \"pendingFeatures\": [\"every discussed but not implemented feature\"]\n" +
+    "}";
+
+  return prompt;
 }
 
 module.exports = { buildParserPrompt };
